@@ -1,0 +1,20 @@
+/* Estilos específicos para la vista Panel */
+.panel-profile {
+  background: #fff;
+  border: 1px solid #e6e6e6;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.panel-profile h3 {
+  margin-top: 0;
+}
+
+.panel-profile img {
+  border-radius: 50%;
+}
+
+.panel-actions {
+  display: flex;
+  gap: 8px;
+}
