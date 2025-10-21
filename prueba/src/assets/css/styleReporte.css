@@ -1,53 +1,284 @@
-/* Estilos específicos para la página de reportes */
-.reporte-container {
-    padding: 20px;
+/* src/assets/css/styleReporte.css */
+.reporte-header {
+  text-align: center;
+  margin-bottom: 2rem;
 }
 
-.reporte-layout {
-    display: flex;
-    gap: 20px;
-    min-height: 70vh;
+.reporte-header h1 {
+  color: #333;
+  margin-bottom: 0.5rem;
 }
 
-.reporte-sidebar {
-    flex: 0 0 350px;
-    background: white;
-    border-radius: 10px;
-    padding: 20px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    max-height: 80vh;
-    overflow-y: auto;
+.estadisticas {
+  background: #f8f9fa;
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin-bottom: 2rem;
 }
 
-.reporte-main {
-    flex: 1;
-    background: white;
-    border-radius: 10px;
-    padding: 20px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+.estadisticas h3 {
+  color: #333;
+  margin-bottom: 1rem;
 }
 
-.historial-lista {
-    margin-top: 20px;
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
 }
 
-.reporte-vacio {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 50vh;
+.stat-card {
+  background: white;
+  padding: 1rem;
+  border-radius: 6px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.empty-state {
-    text-align: center;
-    color: #7f8c8d;
+.stat-card h4 {
+  color: #666;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
 }
 
-.empty-icon {
-    font-size: 4rem;
-    margin-bottom: 1rem;
+.stat-number {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #007bff;
+  margin: 0;
 }
 
-.icon {
-    margin-right: 8px;
+.controles-reporte {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.filtros {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filtros label {
+  font-weight: bold;
+  color: #333;
+}
+
+.filtros select {
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.acciones {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.3s;
+}
+
+.btn-exportar {
+  background-color: #28a745;
+  color: white;
+}
+
+.btn-exportar:hover {
+  background-color: #218838;
+}
+
+.btn-limpiar {
+  background-color: #dc3545;
+  color: white;
+}
+
+.btn-limpiar:hover {
+  background-color: #c82333;
+}
+
+.btn-info {
+  background-color: #17a2b8;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.btn-danger {
+  background-color: #dc3545;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.tabla-reportes {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.table th {
+  background-color: #f8f9fa;
+  font-weight: bold;
+  color: #333;
+}
+
+.badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: capitalize;
+}
+
+.badge-comercial {
+  background-color: #007bff;
+  color: white;
+}
+
+.badge-especial {
+  background-color: #6f42c1;
+  color: white;
+}
+
+.badge-pasajero {
+  background-color: #e83e8c;
+  color: white;
+}
+
+.no-data {
+  text-align: center;
+  padding: 3rem;
+  color: #666;
+}
+
+.no-data p {
+  margin: 0.5rem 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .controles-reporte {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .table {
+    font-size: 0.9rem;
+  }
+  
+  .table th,
+  .table td {
+    padding: 0.5rem;
+  }
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  border-radius: 8px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  padding: 1rem;
+  border-bottom: 1px solid #dee2e6;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #666;
+}
+
+.modal-close:hover {
+  color: #333;
+}
+
+.modal-body {
+  padding: 1rem;
+}
+
+.modal-footer {
+  padding: 1rem;
+  border-top: 1px solid #dee2e6;
+  text-align: right;
+}
+
+.detalles-cabecera {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+.detalles-cabecera p {
+  margin: 0.5rem 0;
+}
+
+.detalles-contenido h4 {
+  color: #333;
+  margin-bottom: 1rem;
+}
+
+.detalles-contenido p {
+  margin: 0.5rem 0;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.detalles-contenido p:last-child {
+  border-bottom: none;
 }

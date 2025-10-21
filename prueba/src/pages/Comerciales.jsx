@@ -107,8 +107,15 @@ const Comerciales = () => {
   };
 
   const saveCalculation = (data) => {
-    console.log('Guardando cálculo:', data);
-    // Aquí implementarás la lógica para guardar
+    console.log('Guardando cálculo comercial:', data);
+    // Guardar en localStorage
+    const calculosPrevios = JSON.parse(localStorage.getItem('calculosComerciales') || '[]');
+    calculosPrevios.push({
+      ...data,
+      fecha: new Date().toISOString(),
+      id: Date.now()
+    });
+    localStorage.setItem('calculosComerciales', JSON.stringify(calculosPrevios));
   };
 
   const resetearFormulario = () => {
