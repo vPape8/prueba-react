@@ -202,13 +202,23 @@ const Comerciales = () => {
           </div>
         </div>
         
-        <button 
-          id="calcular-comercial" 
-          className="btn"
-          onClick={calcularCosto}
-        >
-          Calcular Costo
-        </button>
+        <div className="button-group">
+          <button 
+            id="calcular-comercial" 
+            className="btn"
+            onClick={calcularCosto}
+          >
+            Calcular Costo
+          </button>
+          
+          <button 
+            className="btn btn-secondary"
+            onClick={resetearFormulario}
+            style={{backgroundColor: '#6c757d', marginTop: '0.5rem'}}
+          >
+            Resetear
+          </button>
+        </div>
         
         {/* Resultados - condicional */}
         {resultado.mostrar && (

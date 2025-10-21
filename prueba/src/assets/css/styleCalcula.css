@@ -142,3 +142,18 @@
     padding: 15px;
   }
 }
+
+.btn-secondary {
+  background-color: #6c757d !important;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background-color: #545b62 !important;
+}
+
+.button-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
