@@ -28,7 +28,7 @@ const Calculadora = () => {
               <p className="card-text">Cálculo para cruceros y transbordadores de pasajeros.</p>
               <Link to="/pasajeros" className="btn btn-primary btn-dark">
                 Calcular
-            </Link>
+              </Link>
             </div>
           </div>
         </div>
@@ -37,10 +37,10 @@ const Calculadora = () => {
           <div className="card">
             <div className="card-body text-center">
               <h5 className="card-title">Buques Especiales</h5>
-              <p className="card-text">Cálculo para buques de investigación, militares, etc.</p>
+              <p className="card-text">Cálculo para buques de investigación, militares, pesqueros, etc.</p>
               <Link to="/especiales" className="btn btn-primary btn-dark">
                 Calcular
-            </Link>
+              </Link>
             </div>
           </div>
         </div>
