@@ -139,7 +139,7 @@ const Pasajeros = () => {
     <div className="container mt-4">
       <div className="calculator">
         <div className="calculator-header">
-          <h2>Buques de Pasaje</h2>
+          <h2>Buques de Pasajeros</h2>
           <p>Calcule el costo de estadía para cruceros y transbordadores</p>
         </div>
         
