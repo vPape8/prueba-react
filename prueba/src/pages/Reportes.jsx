@@ -1,11 +1,16 @@
 // src/pages/Reportes.jsx
 import React, { useState, useEffect } from 'react';
+import ModalDetalles from '../components/ModalDetalles';
+import { exportToExcel, exportAllData } from '../utils/exportToExcel';
 import '../assets/css/styleReporte.css';
 
 const Reportes = () => {
   const [calculos, setCalculos] = useState([]);
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [estadisticas, setEstadisticas] = useState({});
+  const [calculoSeleccionado, setCalculoSeleccionado] = useState(null);
+  const [mostrarModal, setMostrarModal] = useState(false);
+  const [mostrarDropdown, setMostrarDropdown] = useState(false);
 
   // Cargar cálculos al montar el componente
   useEffect(() => {
@@ -13,21 +18,17 @@ const Reportes = () => {
   }, []);
 
   const cargarCalculos = () => {
-    // Cargar cálculos de las tres calculadoras
     const comerciales = JSON.parse(localStorage.getItem('calculosComerciales') || '[]');
     const especiales = JSON.parse(localStorage.getItem('calculosEspeciales') || '[]');
     const pasajeros = JSON.parse(localStorage.getItem('calculosPasajeros') || '[]');
 
-    // Combinar todos los cálculos con su tipo
     const todosCalculos = [
-      ...comerciales.map(c => ({ ...c, tipo: 'comercial' })),
-      ...especiales.map(c => ({ ...c, tipo: 'especial' })),
-      ...pasajeros.map(c => ({ ...c, tipo: 'pasajero' }))
+      ...comerciales.map(c => ({ ...c, tipo: 'comercial', tipoDisplay: 'Comercial' })),
+      ...especiales.map(c => ({ ...c, tipo: 'especial', tipoDisplay: 'Especial' })),
+      ...pasajeros.map(c => ({ ...c, tipo: 'pasajero', tipoDisplay: 'Pasajero' }))
     ];
 
-    // Ordenar por fecha (más reciente primero)
     todosCalculos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-    
     setCalculos(todosCalculos);
     calcularEstadisticas(todosCalculos);
   };
@@ -45,11 +46,17 @@ const Reportes = () => {
       return acc;
     }, {});
 
+    const ingresosPorTipo = calculosArray.reduce((acc, calc) => {
+      acc[calc.tipo] = (acc[calc.tipo] || 0) + calc.total;
+      return acc;
+    }, {});
+
     setEstadisticas({
       totalCalculos: calculosArray.length,
       totalIngresos: totales,
       promedio: promedio,
-      porTipo: porTipo
+      porTipo: porTipo,
+      ingresosPorTipo: ingresosPorTipo
     });
   };
 
@@ -57,6 +64,26 @@ const Reportes = () => {
   const calculosFiltrados = filtroTipo === 'todos' 
     ? calculos 
     : calculos.filter(calc => calc.tipo === filtroTipo);
+
+  const verDetalles = (calculo) => {
+    setCalculoSeleccionado(calculo);
+    setMostrarModal(true);
+  };
+
+  const cerrarModal = () => {
+    setMostrarModal(false);
+    setCalculoSeleccionado(null);
+  };
+
+  const eliminarCalculo = (id, tipo) => {
+    if (window.confirm('¿Estás seguro de que quieres eliminar este cálculo?')) {
+      const key = `calculos${tipo.charAt(0).toUpperCase() + tipo.slice(1)}`;
+      const calculosActuales = JSON.parse(localStorage.getItem(key) || '[]');
+      const nuevosCalculos = calculosActuales.filter(calc => calc.id !== id);
+      localStorage.setItem(key, JSON.stringify(nuevosCalculos));
+      cargarCalculos();
+    }
+  };
 
   const limpiarReportes = () => {
     if (window.confirm('¿Estás seguro de que quieres eliminar todos los reportes? Esta acción no se puede deshacer.')) {
@@ -69,8 +96,61 @@ const Reportes = () => {
   };
 
   const exportarCSV = () => {
-    // Implementaremos esto después
-    console.log('Exportando CSV...');
+    if (calculosFiltrados.length === 0) {
+      alert('No hay datos para exportar');
+      return;
+    }
+
+    const headers = ['Fecha', 'Tipo', 'Total', 'Detalles'];
+    const csvData = calculosFiltrados.map(calculo => [
+      new Date(calculo.fecha).toLocaleDateString(),
+      calculo.tipoDisplay,
+      `$${calculo.total.toFixed(2)}`,
+      JSON.stringify(calculo.details)
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => row.join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `reportes-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportarExcel = async () => {
+    if (calculosFiltrados.length === 0) {
+      alert('No hay datos para exportar');
+      return;
+    }
+    try {
+      await exportToExcel(calculosFiltrados, 'reportes_filtrados');
+    } catch (error) {
+      console.error('Error en exportación Excel:', error);
+      alert('Error al exportar a Excel');
+    }
+  };
+
+  const exportarTodoExcel = async () => {
+    try {
+      await exportAllData();
+    } catch (error) {
+      console.error('Error en exportación completa:', error);
+      alert('Error al exportar todos los datos');
+    }
+  };
+
+  const toggleDropdown = () => {
+    setMostrarDropdown(!mostrarDropdown);
+  };
+
+  const closeDropdown = () => {
+    setMostrarDropdown(false);
   };
 
   return (
@@ -97,6 +177,25 @@ const Reportes = () => {
               <h4>Promedio por Cálculo</h4>
               <p className="stat-number">${estadisticas.promedio?.toFixed(2)}</p>
             </div>
+            {estadisticas.porTipo && (
+              <>
+                <div className="stat-card">
+                  <h4>Comerciales</h4>
+                  <p className="stat-number">{estadisticas.porTipo.comercial || 0}</p>
+                  <small>${estadisticas.ingresosPorTipo?.comercial?.toFixed(2) || '0.00'}</small>
+                </div>
+                <div className="stat-card">
+                  <h4>Especiales</h4>
+                  <p className="stat-number">{estadisticas.porTipo.especial || 0}</p>
+                  <small>${estadisticas.ingresosPorTipo?.especial?.toFixed(2) || '0.00'}</small>
+                </div>
+                <div className="stat-card">
+                  <h4>Pasajeros</h4>
+                  <p className="stat-number">{estadisticas.porTipo.pasajero || 0}</p>
+                  <small>${estadisticas.ingresosPorTipo?.pasajero?.toFixed(2) || '0.00'}</small>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -118,11 +217,54 @@ const Reportes = () => {
         </div>
 
         <div className="acciones">
-          <button className="btn btn-exportar" onClick={exportarCSV}>
-            Exportar CSV
-          </button>
+          <div className="dropdown">
+            <button 
+              className="btn btn-exportar dropdown-toggle" 
+              type="button" 
+              onClick={toggleDropdown}
+            >
+              Exportar
+            </button>
+            {mostrarDropdown && (
+              <ul className="dropdown-menu show">
+                <li>
+                  <button 
+                    className="dropdown-item" 
+                    onClick={() => {
+                      exportarExcel();
+                      closeDropdown();
+                    }}
+                  >
+                    📊 Excel (Filtrado)
+                  </button>
+                </li>
+                <li>
+                  <button 
+                    className="dropdown-item" 
+                    onClick={() => {
+                      exportarTodoExcel();
+                      closeDropdown();
+                    }}
+                  >
+                    📈 Excel (Todos los datos)
+                  </button>
+                </li>
+                <li>
+                  <button 
+                    className="dropdown-item" 
+                    onClick={() => {
+                      exportarCSV();
+                      closeDropdown();
+                    }}
+                  >
+                    📄 CSV
+                  </button>
+                </li>
+              </ul>
+            )}
+          </div>
           <button className="btn btn-limpiar" onClick={limpiarReportes}>
-            Limpiar Reportes
+            🗑️ Limpiar Reportes
           </button>
         </div>
       </div>
@@ -146,14 +288,16 @@ const Reportes = () => {
                   <td>{new Date(calculo.fecha).toLocaleDateString()}</td>
                   <td>
                     <span className={`badge badge-${calculo.tipo}`}>
-                      {calculo.tipo}
+                      {calculo.tipoDisplay}
                     </span>
                   </td>
-                  <td>${calculo.total.toFixed(2)}</td>
+                  <td>
+                    <strong>${calculo.total.toFixed(2)}</strong>
+                  </td>
                   <td>
                     <button 
                       className="btn btn-sm btn-info"
-                      onClick={() => console.log('Ver detalles:', calculo)}
+                      onClick={() => verDetalles(calculo)}
                     >
                       Ver Detalles
                     </button>
@@ -161,7 +305,7 @@ const Reportes = () => {
                   <td>
                     <button 
                       className="btn btn-sm btn-danger"
-                      onClick={() => console.log('Eliminar:', calculo.id)}
+                      onClick={() => eliminarCalculo(calculo.id, calculo.tipo)}
                     >
                       Eliminar
                     </button>
@@ -172,11 +316,39 @@ const Reportes = () => {
           </table>
         ) : (
           <div className="no-data">
-            <p>No hay cálculos para mostrar.</p>
+            <h3>📊 No hay cálculos para mostrar</h3>
             <p>Realiza algunos cálculos en las calculadoras para ver los reportes aquí.</p>
+            <div style={{ marginTop: '20px' }}>
+              <a href="/calculadora" className="btn btn-exportar">
+                Ir a Calculadoras
+              </a>
+            </div>
           </div>
         )}
       </div>
+
+      {/* Modal de Detalles */}
+      {mostrarModal && (
+        <ModalDetalles 
+          calculo={calculoSeleccionado}
+          onClose={cerrarModal}
+        />
+      )}
+
+      {/* Overlay para cerrar dropdown */}
+      {mostrarDropdown && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 999
+          }}
+          onClick={closeDropdown}
+        />
+      )}
     </div>
   );
 };
