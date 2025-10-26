@@ -37,17 +37,6 @@ const Home = () => {
             </div>
           </div>
 
-          {/* Configuraciones */}
-          <div className="col-md-6">
-            <div className="card shadow h-100">
-              <div className="card-body">
-                <h5 className="card-title">Configuraciones</h5>
-                <p className="card-text">Texto de ejemplo para la tercera opción.</p>
-                <Link to="/panel" className="btn btn-dark">Ir a la página</Link>
-              </div>
-            </div>
-          </div>
-
           {/* Perfil */}
           <div className="col-md-6">
             <div className="card shadow h-100">
