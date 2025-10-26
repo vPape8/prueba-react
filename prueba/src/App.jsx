@@ -11,6 +11,7 @@ import Pasajeros from './pages/Pasajeros';
 import Reportes from './pages/Reportes';
 import Contacto from './pages/Contacto';
 import Panel from './pages/Panel';
+import PrivateRoute from './components/PrivateRoute';
 
 function App() {
   return (
@@ -18,15 +19,13 @@ function App() {
       <div className="App">
         <Layout>
           <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/login" element={<InicioSeccion />} />
-            <Route path="/calculadora" element={<Calculadora />} />
-            <Route path="/comerciales" element={<Comerciales />} /> 
-            <Route path="/especiales" element={<Especiales />} />
-            <Route path="/pasajeros" element={<Pasajeros/>}/>
-            <Route path="/reportes" element={<Reportes />} />
-            <Route path="/contacto" element={<Contacto />} />
-            <Route path="/panel" element={<Panel />} />
+                <Route path="/login" element={<InicioSeccion />} />
+                <Route path="/" element={<PrivateRoute><Home/></PrivateRoute>} />
+                <Route path="/calculadora" element={<PrivateRoute><Calculadora/></PrivateRoute>} />
+                <Route path="/comerciales" element={<PrivateRoute><Comerciales/></PrivateRoute>} /> 
+                <Route path="/reportes" element={<PrivateRoute><Reportes/></PrivateRoute>} />
+                <Route path="/contacto" element={<PrivateRoute><Contacto/></PrivateRoute>} />
+                <Route path="/panel" element={<PrivateRoute><Panel/></PrivateRoute>} />
           </Routes>
         </Layout>
       </div>
