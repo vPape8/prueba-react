@@ -1,0 +1,49 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`el componente ModalDetalles coincide con el snapshot (testing-library) 1`] = `
+<DocumentFragment>
+  <div
+    class="modal-overlay"
+  >
+    <div
+      class="modal-content"
+    >
+      <h2>
+        📊 Detalles del Cálculo
+      </h2>
+      <button>
+        Cerrar
+      </button>
+      <div>
+        <strong>
+          Tipo:
+        </strong>
+         
+        <span>
+          general
+        </span>
+      </div>
+      <div>
+        <strong>
+          Total:
+        </strong>
+         
+        <span>
+          $1000.00
+        </span>
+      </div>
+      <div>
+        <p>
+          Tarifa base: $800.00
+        </p>
+        <p>
+          Servicios: $150.00
+        </p>
+        <p>
+          Impuestos: $50.00
+        </p>
+      </div>
+    </div>
+  </div>
+</DocumentFragment>
+`;
