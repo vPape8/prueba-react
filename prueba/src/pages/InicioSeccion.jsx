@@ -2,15 +2,14 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../assets/css/auth.css'
 
-// IP Pública de tu EC2
+// Asegúrate que esta IP es la correcta de tu EC2
 const API_URL = 'http://54.88.10.118:8080/auth';
 
 const InicioSeccion = () => {
   const navigate = useNavigate()
-  const [mode, setMode] = useState('login') // 'login' or 'register'
-  
-  // Estado del formulario adaptado al Backend (username, password)
-  const [form, setForm] = useState({ username: '', password: '', rol: 'USER' })
+  const [mode, setMode] = useState('login') 
+  // CAMBIO 1: Usamos 'email' en lugar de 'username'
+  const [form, setForm] = useState({ email: '', password: '', rol: 'USER' })
   const [message, setMessage] = useState('')
 
   const handleChange = (e) => {
@@ -18,11 +17,57 @@ const InicioSeccion = () => {
     setForm((f) => ({ ...f, [name]: value }))
   }
 
-  
+  const handleLogin = async (e) => {
+    e.preventDefault()
+    setMessage('Conectando...')
+    
+    // CAMBIO 2: Validación de email
+    if (!form.email || !form.password) {
+        setMessage('Por favor ingresa correo y contraseña');
+        return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // CAMBIO 3: Enviamos 'email' al backend
+        body: JSON.stringify({ email: form.email, password: form.password })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        // 1. Guardar Token REAL
+        localStorage.setItem('token', data.token); 
+        
+        // 2. Guardar Usuario Visual (Legacy) usando el email como nombre
+        const usuarioVisual = { 
+            id: Date.now(),
+            name: form.email.split('@')[0], // Usamos la parte antes del @ como nombre
+            email: form.email,
+            rol: 'USER' 
+        };
+        localStorage.setItem('current_user', JSON.stringify(usuarioVisual));
+
+        setMessage('Inicio de sesión correcto');
+        
+        window.dispatchEvent(new CustomEvent('user-changed', { detail: usuarioVisual }));
+
+        navigate('/'); 
+      } else {
+        setMessage('Credenciales incorrectas');
+      }
+    } catch (error) {
+      console.error(error);
+      setMessage('Error de conexión con el servidor');
+    }
+  }
+
   const handleRegister = async (e) => {
     e.preventDefault()
     
-    if (!form.username || !form.password) {
+    if (!form.email || !form.password) {
       setMessage('Completa todos los campos')
       return
     }
@@ -32,86 +77,45 @@ const InicioSeccion = () => {
       const response = await fetch(`${API_URL}/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // CAMBIO 4: Enviamos el formulario completo que ya tiene 'email'
         body: JSON.stringify(form)
       });
 
       if (response.ok) {
-        setMessage('Registro exitoso. Ahora puedes iniciar sesión.')
-        setMode('login')
-        setForm({ username: '', password: '', rol: 'USER' }) // Limpiar form
+        setMessage('Registro exitoso. Ahora inicia sesión.');
+        setMode('login');
+        // Limpiamos el formulario manteniendo el email para facilitar el login
+        setForm(prev => ({ ...prev, password: '' }));
       } else {
-        setMessage('Error: El usuario ya existe o datos inválidos')
+        // Intentamos leer el mensaje de error del backend si existe
+        const errorText = await response.text();
+        setMessage(errorText || 'Error al registrar. El correo podría ya existir.');
       }
     } catch (error) {
-      console.error(error)
-      setMessage('Error de conexión con el servidor')
+      setMessage('Error de conexión');
     }
-  }
-
-  // Lógica de Login (Conectada al Backend)
-  const handleLogin = async (e) => {
-    e.preventDefault()
-    
-    if (!form.username || !form.password) {
-      setMessage('Introduce usuario y contraseña')
-      return
-    }
-
-    try {
-      setMessage('Verificando...')
-      const response = await fetch(`${API_URL}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: form.username, password: form.password })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        // Guardar el token REAL del backend
-        localStorage.setItem('token', data.token); 
-        setMessage('Inicio de sesión correcto')
-        
-        // Disparar evento para actualizar cabecera si lo usas
-        try {
-            window.dispatchEvent(new CustomEvent('user-changed', { detail: { name: form.username } }))
-        } catch (err) { /* ignore */ }
-
-        navigate('/panel') // Redirigir al panel
-      } else {
-        setMessage('Credenciales incorrectas')
-      }
-    } catch (error) {
-      console.error(error)
-      setMessage('Error de conexión con el servidor')
-    }
-  }
-
-  // Botón Demo (Crea un usuario admin rápido en la BD si no existe)
-  const fillDemo = () => {
-    setForm({ username: 'admin', password: '123', rol: 'ADMIN' })
-    setMessage('Datos demo cargados. Intenta Registrar o Entrar.')
   }
 
   return (
-    <div className="container mt-4" style={{ maxWidth: 500 }}>
+    <div className="container mt-4" style={{ maxWidth: 400 }}>
       <div className="card shadow p-4">
-        <h2 className="text-center mb-4">{mode === 'login' ? 'Iniciar sesión' : 'Registro'}</h2>
-
+        <h2 className="text-center mb-4">{mode === 'login' ? 'Iniciar Sesión' : 'Registro'}</h2>
         <form onSubmit={mode === 'login' ? handleLogin : handleRegister}>
             
-            {/* Campo Usuario (Username) */}
+            {/* CAMBIO 5: Input de tipo Email */}
             <div className="mb-3">
-              <label className="form-label">Usuario</label>
+              <label className="form-label">Correo Electrónico</label>
               <input 
-                name="username" 
-                value={form.username} 
+                name="email" 
+                type="email"
+                value={form.email} 
                 onChange={handleChange} 
                 className="form-control" 
-                placeholder="Ej: admin"
+                placeholder="ejemplo@correo.com"
+                required 
               />
             </div>
 
-            {/* Campo Contraseña */}
             <div className="mb-3">
               <label className="form-label">Contraseña</label>
               <input 
@@ -120,40 +124,30 @@ const InicioSeccion = () => {
                 value={form.password} 
                 onChange={handleChange} 
                 className="form-control" 
+                required 
               />
             </div>
 
-            {/* Botones de Acción */}
             <div className="d-grid gap-2">
-              <button type="submit" className="btn btn-primary btn-lg">
+              <button type="submit" className="btn btn-primary">
                 {mode === 'login' ? 'Entrar' : 'Registrar'}
               </button>
             </div>
-
-            <div className="d-flex justify-content-between mt-3">
+            
+            <div className="mt-3 text-center">
               <button 
                 type="button" 
-                className="btn btn-link text-decoration-none" 
+                className="btn btn-link" 
                 onClick={() => {
                     setMode(mode === 'login' ? 'register' : 'login');
                     setMessage('');
                 }}
               >
-                {mode === 'login' ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
-              </button>
-              
-              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={fillDemo}>
-                Demo
+                {mode === 'login' ? '¿Crear cuenta?' : '¿Ya tienes cuenta?'}
               </button>
             </div>
         </form>
-
-        {/* Mensajes de Feedback */}
-        {message && (
-            <div className={`alert mt-3 ${message.includes('exitoso') || message.includes('correcto') ? 'alert-success' : 'alert-danger'}`} role="alert">
-                {message}
-            </div>
-        )}
+        {message && <div className="alert alert-info mt-3">{message}</div>}
       </div>
     </div>
   )

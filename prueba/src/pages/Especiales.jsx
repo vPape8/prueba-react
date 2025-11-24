@@ -2,230 +2,143 @@
 import React, { useState } from 'react';
 import '../assets/css/styleCalcula.css';
 
+// IP Pública de tu EC2
+const API_URL = 'http://54.88.10.118:8080/api/boletas';
+
 const Especiales = () => {
-    const [tonelaje, setTonelaje] = useState('');
-    const [dias, setDias] = useState('1');
-    const [tipoBuque, setTipoBuque] = useState('general');
-    const [serviciosEspeciales, setServiciosEspeciales] = useState('basico');
+  
+  const [codBuque, setCodBuque] = useState('');
+  const [idPuerto, setIdPuerto] = useState('');
+  const [idFuncionario, setIdFuncionario] = useState('');
+  
+  const [resultado, setResultado] = useState({
+    mostrar: false,
+    total: 0,
+    idBoleta: '',
+    fecha: ''
+  });
 
-    const [errors, setErrors] = useState({
-        tonelaje: false,
-        dias: false
-    });
+  const [status, setStatus] = useState({ loading: false, error: '' });
 
-    const [resultado, setResultado] = useState({
-        mostrar: false,
-        total: 0,
-        tarifaBase: 0,
-        costoServicios: 0,
-        impuestos: 0
-    });
-
-  const validarTonelaje = (valor) => {
-    const num = parseFloat(valor);
-    if (isNaN(num) || num < 0) {
-      setErrors(prev => ({ ...prev, tonelaje: true }));
-      return null;
-    } else {
-      setErrors(prev => ({ ...prev, tonelaje: false }));
-      return num;
-    }
-  };
-
-  const validarDias = (valor) => {
-    const num = parseInt(valor);
-    if (isNaN(num) || num < 1) {
-      setErrors(prev => ({ ...prev, dias: true }));
-      return null;
-    } else {
-      setErrors(prev => ({ ...prev, dias: false }));
-      return num;
-    }
-  };    
-
-  const calcularCosto = () => {
-    const tonelajeValido = validarTonelaje(tonelaje);
-    const diasValidos = validarDias(dias);
-
-    if (tonelajeValido === null || diasValidos === null){
+ 
+  const calcularEnBackend = async () => {
+    setStatus({ loading: false, error: '' });
+    
+    const token = localStorage.getItem('token');
+    if (!token) {
+        alert("Debes iniciar sesión primero");
         return;
     }
 
-    let tarifaBase = tonelajeValido * 0.4;
-
-    switch(tipoBuque) {
-        case 'investigacion':
-            tarifaBase *= 0.7;
-            break;
-        case 'militar':
-            tarifaBase *= 1.2;
-            break;
-        case 'pesca':
-            tarifaBase *= 0.9;
-            break;
-        case 'proteccion':
-            tarifaBase *= 0.8;
-            break;
-        default:
-            break;
+    if (!codBuque || !idPuerto || !idFuncionario) {
+        setStatus({ loading: false, error: 'Por favor completa todos los campos (IDs)' });
+        return;
     }
 
-    let costoServicios = 0;
-    switch(serviciosEspeciales) {
-        case 'seguridad':
-            costoServicios = 800;
-            break;
-        case 'tecnico':
-            costoServicios = 1500;
-            break;
-        case 'completo':
-            costoServicios = 3000;
-            break;
-        default:
-            break;
+    try {
+        setStatus({ loading: true, error: '' });
+        
+        // Endpoint correcto para cálculo con JSON
+        const url = `${API_URL}/calcular`; 
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+           
+            body: JSON.stringify({
+                codBuque: codBuque,
+                idPuerto: parseInt(idPuerto),
+                idFuncionario: parseInt(idFuncionario)
+            })
+        });
+
+        if (response.ok) {
+            const boleta = await response.json();
+            
+            setResultado({
+                mostrar: true,
+                total: boleta.monto,
+                idBoleta: boleta.idBoleta,
+                fecha: boleta.fechaEmision || new Date().toLocaleDateString()
+            });
+            setStatus({ loading: false, error: '' });
+        } else {
+            setStatus({ loading: false, error: 'Error: Verifica que el Buque Especial y demás IDs existan en la BD.' });
+        }
+    } catch (error) {
+        console.error(error);
+        setStatus({ loading: false, error: 'No se pudo conectar con el servidor.' });
     }
-
-    const impuestos = (tarifaBase + costoServicios) * 0.16;
-    const total = (tarifaBase + costoServicios + impuestos) * diasValidos;
-
-    // Mostrar resultados
-    setResultado({
-      mostrar: true,
-      total: total,
-      tarifaBase: tarifaBase * diasValidos,
-      especialServicios: costoServicios * diasValidos,
-      impuestos: impuestos * diasValidos
-    });
-
-    // Guardar cálculo
-    saveCalculation({
-      type: 'especial',
-      total: total,
-      details: {
-        tonelaje: tonelajeValido,
-        dias: diasValidos,
-        tipo: tipoBuque,
-        servicios: serviciosEspeciales,
-        tarifaBase: tarifaBase * diasValidos,
-        especialServicios: costoServicios * diasValidos,
-        impuestos: impuestos * diasValidos
-      }
-    });
   };
 
-  // Función para guardar cálculos
-  const saveCalculation = (data) => {
-    console.log('Guardando cálculo especial:', data);
-    // Aquí implementarás la lógica para guardar en localStorage o base de datos
-    // Por ahora solo guardamos en localStorage como ejemplo
-    const calculosPrevios = JSON.parse(localStorage.getItem('calculosEspeciales') || '[]');
-    calculosPrevios.push({
-      ...data,
-      fecha: new Date().toISOString(),
-      id: Date.now()
-    });
-    localStorage.setItem('calculosEspeciales', JSON.stringify(calculosPrevios));
-  };
-
-  // Función para resetear el formulario
   const resetearFormulario = () => {
-    setTonelaje('');
-    setDias('1');
-    setTipoBuque('investigacion');
-    setServiciosEspeciales('ninguno');
-    setErrors({ tonelaje: false, dias: false });
-    setResultado({
-      mostrar: false,
-      total: 0,
-      tarifaBase: 0,
-      especialServicios: 0,
-      impuestos: 0
-    });
+    setCodBuque('');
+    setIdPuerto('');
+    setIdFuncionario('');
+    setResultado({ mostrar: false, total: 0, idBoleta: '', fecha: '' });
+    setStatus({ loading: false, error: '' });
   };
 
   return (
     <div className="container mt-4">
       <div className="calculator">
         <div className="calculator-header">
+          {/* Título específico para diferenciar la página */}
           <h2>Buques Especiales</h2>
-          <p>Calcule el costo de estadía para buques especializados</p>
+          <p>Cálculo oficial para buques de investigación, militares o pesqueros</p>
         </div>
         
         <div className="calculator-grid">
-          {/* Campo Tonelaje */}
+          {/* Inputs adaptados a IDs */}
           <div className="form-group">
-            <label htmlFor="esp-tonelaje">Tonelaje (TRB)</label>
+            <label htmlFor="cod-buque">Código del Buque Especial</label>
+            <input 
+              type="text" 
+              id="cod-buque"
+              placeholder="Ej: ESP-001"
+              value={codBuque}
+              onChange={(e) => setCodBuque(e.target.value)}
+            />
+          </div>
+          
+          <div className="form-group">
+            <label htmlFor="id-puerto">ID Puerto</label>
             <input 
               type="number" 
-              id="esp-tonelaje"
-              min="0" 
-              placeholder="Ingrese el tonelaje"
-              value={tonelaje}
-              onChange={(e) => setTonelaje(e.target.value)}
+              id="id-puerto"
+              placeholder="Ej: 1" 
+              value={idPuerto}
+              onChange={(e) => setIdPuerto(e.target.value)}
             />
-            {errors.tonelaje && (
-              <div className="error" style={{display: 'block'}}>
-                Por favor ingrese un valor válido
-              </div>
-            )}
           </div>
           
-          {/* Campo Días */}
           <div className="form-group">
-            <label htmlFor="esp-dias">Días de estadía</label>
+            <label htmlFor="id-funcionario">ID Funcionario</label>
             <input 
-              type="number" 
-              id="esp-dias"
-              min="1" 
-              placeholder="Número de días" 
-              value={dias}
-              onChange={(e) => setDias(e.target.value)}
+              type="number"
+              id="id-funcionario"
+              placeholder="Ej: 1"
+              value={idFuncionario}
+              onChange={(e) => setIdFuncionario(e.target.value)}
             />
-            {errors.dias && (
-              <div className="error" style={{display: 'block'}}>
-                Por favor ingrese al menos 1 día
-              </div>
-            )}
-          </div>
-          
-          {/* Select Tipo de Buque */}
-          <div className="form-group">
-            <label htmlFor="esp-tipo">Tipo de buque</label>
-            <select 
-              id="esp-tipo"
-              value={tipoBuque}
-              onChange={(e) => setTipoBuque(e.target.value)}
-            >
-              <option value="investigacion">Investigación</option>
-              <option value="pesca">Pesquero</option>
-              <option value="proteccion">Protección ambiental</option>
-              <option value="militar">Militar</option>
-            </select>
-          </div>
-          
-          {/* Select Servicios Especiales */}
-          <div className="form-group">
-            <label htmlFor="esp-especial">Servicios especiales requeridos</label>
-            <select 
-              id="esp-especial"
-              value={serviciosEspeciales}
-              onChange={(e) => setServiciosEspeciales(e.target.value)}
-            >
-              <option value="ninguno">Ninguno</option>
-              <option value="seguridad">Seguridad adicional</option>
-              <option value="tecnicos">Servicios técnicos</option>
-              <option value="completos">Servicios completos</option>
-            </select>
           </div>
         </div>
         
+        {/* Mensajes de Feedback */}
+        {status.error && <div className="error" style={{display: 'block', marginBottom: '1rem'}}>{status.error}</div>}
+        {status.loading && <div className="info" style={{color: '#007bff', marginBottom: '1rem'}}>Procesando tarifa especial...</div>}
+
         <div className="button-group">
           <button 
-            id="calcular-especiales" 
+            id="calcular-especial" 
             className="btn"
-            onClick={calcularCosto}
+            onClick={calcularEnBackend}
+            disabled={status.loading}
           >
-            Calcular Costo
+            {status.loading ? 'Calculando...' : 'Calcular Costo'}
           </button>
           
           <button 
@@ -233,21 +146,23 @@ const Especiales = () => {
             onClick={resetearFormulario}
             style={{backgroundColor: '#6c757d', marginTop: '0.5rem'}}
           >
-            Resetear
+            Limpiar
           </button>
         </div>
         
         {/* Resultados */}
         {resultado.mostrar && (
-          <div id="result-especiales" className="result" style={{display: 'block'}}>
-            <h3>Costo total de estadía</h3>
-            <div className="cost">$ <span id="total-especiales">{resultado.total.toFixed(2)}</span></div>
+          <div id="result-especial" className="result" style={{display: 'block'}}>
+            <h3>Boleta Generada</h3>
+            <div className="cost">$ <span id="total-especial">{resultado.total.toFixed(2)}</span></div>
+            
             <div className="details">
-              <p>Desglose de costos:</p>
+              <p>Detalles de la transacción:</p>
               <ul>
-                <li>Tarifa base: $<span id="base-especiales">{resultado.tarifaBase.toFixed(2)}</span></li>
-                <li>Servicios especiales: $<span id="especial-servicios">{resultado.especialServicios.toFixed(2)}</span></li>
-                <li>Impuestos: $<span id="impuestos-especiales">{resultado.impuestos.toFixed(2)}</span></li>
+                <li><strong>ID Boleta:</strong> <span>{resultado.idBoleta}</span></li>
+                <li><strong>Fecha:</strong> <span>{resultado.fecha}</span></li>
+                <li><strong>Buque:</strong> <span>{codBuque}</span></li>
+                <li><strong>Estado:</strong> <span style={{color: 'green'}}>Guardado en BD</span></li>
               </ul>
             </div>
           </div>

@@ -1,225 +1,143 @@
-// src/pages/Pasajeros.jsx
 import React, { useState } from 'react';
-import '../assets/css/styleCalcula.css';
+import '../assets/css/styleCalcula.css'; // Mantiene tus estilos originales
+
+// IP Pública de tu EC2
+const API_URL = 'http://54.88.10.118:8080/api/boletas';
 
 const Pasajeros = () => {
-  // Estados para los campos del formulario
-  const [eslora, setEslora] = useState('');
-  const [pasajeros, setPasajeros] = useState('');
-  const [dias, setDias] = useState('1');
-  const [tipoBuque, setTipoBuque] = useState('crucero');
+  // Usamos los IDs requeridos por el Backend
+  const [codBuque, setCodBuque] = useState('');
+  const [idPuerto, setIdPuerto] = useState('');
+  const [idFuncionario, setIdFuncionario] = useState('');
   
-  // Estados para errores
-  const [errors, setErrors] = useState({
-    eslora: false,
-    pasajeros: false,
-    dias: false
-  });
-  
-  // Estados para resultados
+  // Estado para resultados (adaptado a lo que devuelve el backend)
   const [resultado, setResultado] = useState({
     mostrar: false,
     total: 0,
-    tarifaBase: 0,
-    tarifaPasajero: 0,
-    impuestos: 0
+    idBoleta: '',
+    fecha: ''
   });
 
-  // Funciones de validación
-  const validarNumero = (valor, campo) => {
-    const num = parseFloat(valor);
-    if (isNaN(num) || num < 0) {
-      setErrors(prev => ({ ...prev, [campo]: true }));
-      return null;
-    } else {
-      setErrors(prev => ({ ...prev, [campo]: false }));
-      return num;
-    }
-  };
+  const [status, setStatus] = useState({ loading: false, error: '' });
 
-  const validarDias = (valor) => {
-    const num = parseInt(valor);
-    if (isNaN(num) || num < 1) {
-      setErrors(prev => ({ ...prev, dias: true }));
-      return null;
-    } else {
-      setErrors(prev => ({ ...prev, dias: false }));
-      return num;
-    }
-  };
-
-  // Función para calcular costos
-  const calcularCosto = () => {
-    // Validar entrada
-    const esloraValida = validarNumero(eslora, 'eslora');
-    const pasajerosValidos = validarNumero(pasajeros, 'pasajeros');
-    const diasValidos = validarDias(dias);
+  const calcularEnBackend = async () => {
+    setStatus({ loading: false, error: '' });
     
-    if (esloraValida === null || pasajerosValidos === null || diasValidos === null) {
-      return; // Detener si hay errores de validación
+    const token = localStorage.getItem('token');
+    if (!token) {
+        alert("Debes iniciar sesión primero");
+        return;
     }
 
-    // Cálculos de ejemplo
-    let tarifaBase = esloraValida * 80;
-    
-    // Ajustar según tipo de buque
-    switch (tipoBuque) {
-      case 'crucero':
-        tarifaBase *= 1.5;
-        break;
-      case 'yate':
-        tarifaBase *= 2;
-        break;
-      case 'transbordador':
-        // No hay ajuste para transbordador
-        break;
-      default:
-        break;
+    if (!codBuque || !idPuerto || !idFuncionario) {
+        setStatus({ loading: false, error: 'Por favor completa todos los campos (IDs)' });
+        return;
     }
-    
-    const tarifaPasajero = pasajerosValidos * 10;
-    const impuestos = (tarifaBase + tarifaPasajero) * 0.16;
-    const total = (tarifaBase + tarifaPasajero + impuestos) * diasValidos;
 
-    // Mostrar resultados
-    setResultado({
-      mostrar: true,
-      total: total,
-      tarifaBase: tarifaBase * diasValidos,
-      tarifaPasajero: tarifaPasajero * diasValidos,
-      impuestos: impuestos * diasValidos
-    });
+    try {
+        setStatus({ loading: true, error: '' });
+        
+        // Endpoint que usa el @RequestBody JSON
+        const url = `${API_URL}/calcular`; 
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            // Enviamos el objeto JSON exacto que espera Java
+            body: JSON.stringify({
+                codBuque: codBuque,
+                idPuerto: parseInt(idPuerto),
+                idFuncionario: parseInt(idFuncionario)
+            })
+        });
 
-    // Guardar cálculo
-    saveCalculation({
-      type: 'pasaje',
-      total: total,
-      details: {
-        eslora: esloraValida,
-        pasajeros: pasajerosValidos,
-        dias: diasValidos,
-        tipo: tipoBuque,
-        tarifaBase: tarifaBase * diasValidos,
-        tarifaPasajero: tarifaPasajero * diasValidos,
-        impuestos: impuestos * diasValidos
-      }
-    });
+        if (response.ok) {
+            const boleta = await response.json();
+            
+            setResultado({
+                mostrar: true,
+                total: boleta.monto,
+                idBoleta: boleta.idBoleta,
+                fecha: boleta.fechaEmision || new Date().toLocaleDateString()
+            });
+            setStatus({ loading: false, error: '' });
+        } else {
+            setStatus({ loading: false, error: 'Error: Verifica que el Buque de Pasajeros exista en la BD.' });
+        }
+    } catch (error) {
+        console.error(error);
+        setStatus({ loading: false, error: 'No se pudo conectar con el servidor.' });
+    }
   };
 
-  // Función para guardar cálculos
-  const saveCalculation = (data) => {
-    console.log('Guardando cálculo de pasaje:', data);
-    // Guardar en localStorage
-    const calculosPrevios = JSON.parse(localStorage.getItem('calculosPasajeros') || '[]');
-    calculosPrevios.push({
-      ...data,
-      fecha: new Date().toISOString(),
-      id: Date.now()
-    });
-    localStorage.setItem('calculosPasajeros', JSON.stringify(calculosPrevios));
-  };
-
-  // Función para resetear el formulario
   const resetearFormulario = () => {
-    setEslora('');
-    setPasajeros('');
-    setDias('1');
-    setTipoBuque('crucero');
-    setErrors({ eslora: false, pasajeros: false, dias: false });
-    setResultado({
-      mostrar: false,
-      total: 0,
-      tarifaBase: 0,
-      tarifaPasajero: 0,
-      impuestos: 0
-    });
+    setCodBuque('');
+    setIdPuerto('');
+    setIdFuncionario('');
+    setResultado({ mostrar: false, total: 0, idBoleta: '', fecha: '' });
+    setStatus({ loading: false, error: '' });
   };
 
   return (
     <div className="container mt-4">
       <div className="calculator">
         <div className="calculator-header">
+          {/* Título específico de esta página */}
           <h2>Buques de Pasajeros</h2>
           <p>Calcule el costo de estadía para cruceros y transbordadores</p>
         </div>
         
         <div className="calculator-grid">
-          {/* Campo Eslora */}
+          {/* Inputs adaptados a IDs para el Backend */}
           <div className="form-group">
-            <label htmlFor="pas-eslora">Eslora (metros)</label>
+            <label htmlFor="cod-buque">Código del Buque (Pasajeros)</label>
             <input 
-              type="number" 
-              id="pas-eslora"
-              min="0" 
-              placeholder="Longitud del buque"
-              value={eslora}
-              onChange={(e) => setEslora(e.target.value)}
+              type="text" 
+              id="cod-buque"
+              placeholder="Ej: CRUCERO-001"
+              value={codBuque}
+              onChange={(e) => setCodBuque(e.target.value)}
             />
-            {errors.eslora && (
-              <div className="error" style={{display: 'block'}}>
-                Por favor ingrese un valor válido
-              </div>
-            )}
           </div>
           
-          {/* Campo Número de Pasajeros */}
           <div className="form-group">
-            <label htmlFor="pas-pasajeros">Número de pasajeros</label>
+            <label htmlFor="id-puerto">ID Puerto</label>
             <input 
               type="number" 
-              id="pas-pasajeros"
-              min="0" 
-              placeholder="Cantidad de pasajeros"
-              value={pasajeros}
-              onChange={(e) => setPasajeros(e.target.value)}
+              id="id-puerto"
+              placeholder="Ej: 1" 
+              value={idPuerto}
+              onChange={(e) => setIdPuerto(e.target.value)}
             />
-            {errors.pasajeros && (
-              <div className="error" style={{display: 'block'}}>
-                Por favor ingrese un valor válido
-              </div>
-            )}
           </div>
           
-          {/* Campo Días */}
           <div className="form-group">
-            <label htmlFor="pas-dias">Días de estadía</label>
+            <label htmlFor="id-funcionario">ID Funcionario</label>
             <input 
               type="number" 
-              id="pas-dias"
-              min="1" 
-              placeholder="Número de días" 
-              value={dias}
-              onChange={(e) => setDias(e.target.value)}
+              id="id-funcionario"
+              placeholder="Ej: 1" 
+              value={idFuncionario}
+              onChange={(e) => setIdFuncionario(e.target.value)}
             />
-            {errors.dias && (
-              <div className="error" style={{display: 'block'}}>
-                Por favor ingrese al menos 1 día
-              </div>
-            )}
-          </div>
-          
-          {/* Select Tipo de Buque */}
-          <div className="form-group">
-            <label htmlFor="pas-tipo">Tipo de buque</label>
-            <select 
-              id="pas-tipo"
-              value={tipoBuque}
-              onChange={(e) => setTipoBuque(e.target.value)}
-            >
-              <option value="crucero">Crucero</option>
-              <option value="transbordador">Transbordador</option>
-              <option value="yate">Yate de pasaje</option>
-            </select>
           </div>
         </div>
         
+        {/* Mensajes de Estado */}
+        {status.error && <div className="error" style={{display: 'block', marginBottom: '1rem'}}>{status.error}</div>}
+        {status.loading && <div className="info" style={{color: '#007bff', marginBottom: '1rem'}}>Conectando con la terminal de pasajeros...</div>}
+
         <div className="button-group">
           <button 
             id="calcular-pasaje" 
             className="btn"
-            onClick={calcularCosto}
+            onClick={calcularEnBackend}
+            disabled={status.loading}
           >
-            Calcular Costo
+            {status.loading ? 'Procesando...' : 'Calcular Costo'}
           </button>
           
           <button 
@@ -231,17 +149,18 @@ const Pasajeros = () => {
           </button>
         </div>
         
-        {/* Resultados */}
+        {/* Resultados - Mismo diseño, datos reales */}
         {resultado.mostrar && (
           <div id="result-pasaje" className="result" style={{display: 'block'}}>
             <h3>Costo total de estadía</h3>
             <div className="cost">$ <span id="total-pasaje">{resultado.total.toFixed(2)}</span></div>
             <div className="details">
-              <p>Desglose de costos:</p>
+              <p>Detalles de la boleta:</p>
               <ul>
-                <li>Tarifa base: $<span id="base-pasaje">{resultado.tarifaBase.toFixed(2)}</span></li>
-                <li>Tarifa por pasajero: $<span id="pasajero-pasaje">{resultado.tarifaPasajero.toFixed(2)}</span></li>
-                <li>Impuestos: $<span id="impuestos-pasaje">{resultado.impuestos.toFixed(2)}</span></li>
+                <li><strong>ID Transacción:</strong> <span>{resultado.idBoleta}</span></li>
+                <li><strong>Fecha Emisión:</strong> <span>{resultado.fecha}</span></li>
+                <li><strong>Buque:</strong> <span>{codBuque}</span></li>
+                <li><strong>Estado:</strong> <span style={{color: 'green'}}>Registrado en Sistema</span></li>
               </ul>
             </div>
           </div>
