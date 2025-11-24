@@ -1,184 +1,153 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../assets/css/auth.css'
 
-const USERS_KEY = 'app_users'
-const CURRENT_KEY = 'current_user'
-
-function loadUsers() {
-  try {
-    const raw = localStorage.getItem(USERS_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch (err) {
-    return []
-  }
-}
-
-function saveUsers(users) {
-  try {
-    localStorage.setItem(USERS_KEY, JSON.stringify(users))
-    return true
-  } catch (err) {
-    return false
-  }
-}
-
-function setCurrent(user) {
-  try {
-    localStorage.setItem(CURRENT_KEY, JSON.stringify(user))
-  } catch (err) {
-    // ignore
-  }
-}
-
-function getCurrent() {
-  try {
-    const raw = localStorage.getItem(CURRENT_KEY)
-    return raw ? JSON.parse(raw) : null
-  } catch (err) {
-    return null
-  }
-}
+// Asegúrate que esta IP es la correcta de tu EC2
+const API_URL = 'http://54.88.10.118:8080/auth';
 
 const InicioSeccion = () => {
   const navigate = useNavigate()
-  const [mode, setMode] = useState('login') // 'login' or 'register'
-  const [users, setUsers] = useState([])
-  const [form, setForm] = useState({ name: '', email: '', password: '' })
+  const [mode, setMode] = useState('login') 
+  // CAMBIO 1: Usamos 'email' en lugar de 'username'
+  const [form, setForm] = useState({ email: '', password: '', rol: 'USER' })
   const [message, setMessage] = useState('')
-
-  useEffect(() => {
-    setUsers(loadUsers())
-    const cur = getCurrent()
-    if (cur) {
-      // ya logueado
-      navigate('/')
-    }
-  }, [])
 
   const handleChange = (e) => {
     const { name, value } = e.target
     setForm((f) => ({ ...f, [name]: value }))
   }
 
-  const validateEmail = (email) => /^\S+@\S+\.\S+$/.test(email)
-
-  const handleRegister = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault()
-    if (!form.name || !form.email || !form.password) {
+    setMessage('Conectando...')
+    
+    // CAMBIO 2: Validación de email
+    if (!form.email || !form.password) {
+        setMessage('Por favor ingresa correo y contraseña');
+        return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // CAMBIO 3: Enviamos 'email' al backend
+        body: JSON.stringify({ email: form.email, password: form.password })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        // 1. Guardar Token REAL
+        localStorage.setItem('token', data.token); 
+        
+        // 2. Guardar Usuario Visual (Legacy) usando el email como nombre
+        const usuarioVisual = { 
+            id: Date.now(),
+            name: form.email.split('@')[0], // Usamos la parte antes del @ como nombre
+            email: form.email,
+            rol: 'USER' 
+        };
+        localStorage.setItem('current_user', JSON.stringify(usuarioVisual));
+
+        setMessage('Inicio de sesión correcto');
+        
+        window.dispatchEvent(new CustomEvent('user-changed', { detail: usuarioVisual }));
+
+        navigate('/'); 
+      } else {
+        setMessage('Credenciales incorrectas');
+      }
+    } catch (error) {
+      console.error(error);
+      setMessage('Error de conexión con el servidor');
+    }
+  }
+
+  const handleRegister = async (e) => {
+    e.preventDefault()
+    
+    if (!form.email || !form.password) {
       setMessage('Completa todos los campos')
       return
     }
-    if (!validateEmail(form.email)) {
-      setMessage('Email inválido')
-      return
-    }
-    if (users.find((u) => u.email === form.email)) {
-      setMessage('Ya existe un usuario con ese email')
-      return
-    }
 
-    const newUser = { id: Date.now(), name: form.name, email: form.email, password: form.password }
-    const next = [newUser, ...users]
-    saveUsers(next)
-    setUsers(next)
-    setMessage('Registro exitoso. Ya puedes iniciar sesión')
-    setMode('login')
-    setForm({ name: '', email: '', password: '' })
-  }
-
-  const handleLogin = (e) => {
-    e.preventDefault()
-    if (!form.email || !form.password) {
-      setMessage('Introduce email y contraseña')
-      return
-    }
-    const user = users.find((u) => u.email === form.email && u.password === form.password)
-    if (!user) {
-      setMessage('Credenciales incorrectas')
-      return
-    }
-    setCurrent(user)
-    setMessage('Inicio de sesión correcto')
-    // notify other components (Header) that user changed
     try {
-      window.dispatchEvent(new CustomEvent('user-changed', { detail: user }))
-    } catch (err) {
-      // ignore
+      setMessage('Registrando...')
+      const response = await fetch(`${API_URL}/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // CAMBIO 4: Enviamos el formulario completo que ya tiene 'email'
+        body: JSON.stringify(form)
+      });
+
+      if (response.ok) {
+        setMessage('Registro exitoso. Ahora inicia sesión.');
+        setMode('login');
+        // Limpiamos el formulario manteniendo el email para facilitar el login
+        setForm(prev => ({ ...prev, password: '' }));
+      } else {
+        // Intentamos leer el mensaje de error del backend si existe
+        const errorText = await response.text();
+        setMessage(errorText || 'Error al registrar. El correo podría ya existir.');
+      }
+    } catch (error) {
+      setMessage('Error de conexión');
     }
-    navigate('/')
-  }
-
-  const handleLogout = () => {
-    localStorage.removeItem(CURRENT_KEY)
-    setMessage('Sesión cerrada')
-    setTimeout(() => setMessage(''), 1500)
-    navigate('/login')
-  }
-
-  const fillDemo = () => {
-    const demo = { id: Date.now(), name: 'Demo', email: 'demo@example.com', password: 'demo' }
-    const next = [demo, ...users]
-    saveUsers(next)
-    setUsers(next)
-    setMessage('Usuario demo creado: demo@example.com / demo')
   }
 
   return (
-    <div className="container mt-4" style={{ maxWidth: 720 }}>
-      <h2>{mode === 'login' ? 'Iniciar sesión' : 'Registro'}</h2>
-
-      <div style={{ display: 'flex', gap: 24 }}>
-        <div style={{ flex: 1 }}>
-          <form onSubmit={mode === 'login' ? handleLogin : handleRegister}>
-            {mode === 'register' && (
-              <div style={{ marginBottom: 8 }}>
-                <label>Nombre</label>
-                <input name="name" value={form.name} onChange={handleChange} className="form-control" />
-              </div>
-            )}
-
-            <div style={{ marginBottom: 8 }}>
-              <label>Email</label>
-              <input name="email" value={form.email} onChange={handleChange} className="form-control" />
+    <div className="container mt-4" style={{ maxWidth: 400 }}>
+      <div className="card shadow p-4">
+        <h2 className="text-center mb-4">{mode === 'login' ? 'Iniciar Sesión' : 'Registro'}</h2>
+        <form onSubmit={mode === 'login' ? handleLogin : handleRegister}>
+            
+            {/* CAMBIO 5: Input de tipo Email */}
+            <div className="mb-3">
+              <label className="form-label">Correo Electrónico</label>
+              <input 
+                name="email" 
+                type="email"
+                value={form.email} 
+                onChange={handleChange} 
+                className="form-control" 
+                placeholder="ejemplo@correo.com"
+                required 
+              />
             </div>
 
-            <div style={{ marginBottom: 8 }}>
-              <label>Contraseña</label>
-              <input name="password" type="password" value={form.password} onChange={handleChange} className="form-control" />
+            <div className="mb-3">
+              <label className="form-label">Contraseña</label>
+              <input 
+                name="password" 
+                type="password" 
+                value={form.password} 
+                onChange={handleChange} 
+                className="form-control" 
+                required 
+              />
             </div>
 
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button type="submit" className="btn btn-primary">{mode === 'login' ? 'Entrar' : 'Registrar'}</button>
-              <button type="button" className="btn btn-link" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
-                {mode === 'login' ? 'Crear cuenta' : 'Tengo cuenta'}
+            <div className="d-grid gap-2">
+              <button type="submit" className="btn btn-primary">
+                {mode === 'login' ? 'Entrar' : 'Registrar'}
               </button>
-              <button type="button" className="btn btn-secondary" onClick={fillDemo}>Crear demo</button>
             </div>
-          </form>
-
-          {message && <div style={{ marginTop: 12 }}><strong>{message}</strong></div>}
-        </div>
-
-        <aside style={{ width: 260 }}>
-          <h4>Usuarios registrados</h4>
-          {users.length === 0 ? (
-            <div>No hay usuarios</div>
-          ) : (
-            <ul style={{ listStyle: 'none', padding: 0 }}>
-              {users.map((u) => (
-                <li key={u.id} style={{ padding: '6px 0', borderBottom: '1px solid #eee' }}>
-                  <div style={{ fontWeight: 600 }}>{u.name}</div>
-                  <div style={{ fontSize: 12, color: '#555' }}>{u.email}</div>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div style={{ marginTop: 12 }}>
-            <button className="btn btn-outline-primary" onClick={handleLogout}>Cerrar sesión actual</button>
-          </div>
-        </aside>
+            
+            <div className="mt-3 text-center">
+              <button 
+                type="button" 
+                className="btn btn-link" 
+                onClick={() => {
+                    setMode(mode === 'login' ? 'register' : 'login');
+                    setMessage('');
+                }}
+              >
+                {mode === 'login' ? '¿Crear cuenta?' : '¿Ya tienes cuenta?'}
+              </button>
+            </div>
+        </form>
+        {message && <div className="alert alert-info mt-3">{message}</div>}
       </div>
     </div>
   )

@@ -1,136 +1,83 @@
-// src/pages/Comerciales.jsx
 import React, { useState } from 'react';
 import '../assets/css/styleCalcula.css';
 
+// IP Pública de tu EC2
+const API_URL = 'http://54.88.10.118:8080/api/boleta';
+
 const Comerciales = () => {
-  const [tonelaje, setTonelaje] = useState('');
-  const [dias, setDias] = useState('1');
-  const [tipoCarga, setTipoCarga] = useState('general');
-  const [servicios, setServicios] = useState('basico');
+  // Estados para los IDs que pide el Backend
+  const [codBuque, setCodBuque] = useState('');
+  const [idPuerto, setIdPuerto] = useState('');
+  const [idFuncionario, setIdFuncionario] = useState('');
   
-  const [errors, setErrors] = useState({
-    tonelaje: false,
-    dias: false
-  });
-  
+  // Estado para mostrar resultados
   const [resultado, setResultado] = useState({
     mostrar: false,
     total: 0,
-    tarifaBase: 0,
-    costoServicios: 0,
-    impuestos: 0
+    idBoleta: '',
+    fecha: ''
   });
 
-  const validarTonelaje = (valor) => {
-    const num = parseFloat(valor);
-    if (isNaN(num) || num < 0) {
-      setErrors(prev => ({ ...prev, tonelaje: true }));
-      return null;
-    } else {
-      setErrors(prev => ({ ...prev, tonelaje: false }));
-      return num;
-    }
-  };
+  // Estado para mensajes de error/carga
+  const [status, setStatus] = useState({ loading: false, error: '' });
 
-  const validarDias = (valor) => {
-    const num = parseInt(valor);
-    if (isNaN(num) || num < 1) {
-      setErrors(prev => ({ ...prev, dias: true }));
-      return null;
-    } else {
-      setErrors(prev => ({ ...prev, dias: false }));
-      return num;
-    }
-  };
-
-  const calcularCosto = () => {
-    const tonelajeValido = validarTonelaje(tonelaje);
-    const diasValidos = validarDias(dias);
+  const calcularEnBackend = async () => {
+    setStatus({ loading: false, error: '' });
     
-    if (tonelajeValido === null || diasValidos === null) {
-      return;
+    // 1. Validar Token
+    const token = localStorage.getItem('token');
+    if (!token) {
+        alert("Debes iniciar sesión primero");
+        return;
     }
 
-    let tarifaBase = tonelajeValido * 0.5;
-    
-    switch (tipoCarga) {
-      case 'contenedores':
-        tarifaBase *= 1.2;
-        break;
-      case 'granel':
-        tarifaBase *= 0.9;
-        break;
-      case 'liquido':
-        tarifaBase *= 1.1;
-        break;
-      default:
-        break;
+    // 2. Validar Campos
+    if (!codBuque || !idPuerto || !idFuncionario) {
+        setStatus({ loading: false, error: 'Por favor completa todos los campos (IDs)' });
+        return;
     }
-    
-    let costoServicios = 0;
-    switch (servicios) {
-      case 'medio':
-        costoServicios = 500;
-        break;
-      case 'completo':
-        costoServicios = 1200;
-        break;
-      default:
-        break;
+
+    try {
+        setStatus({ loading: true, error: '' });
+        
+        // 3. Llamada al Backend (EC2)
+        // Nota: Tu backend espera parámetros en la URL (?cod_buque=...)
+        const url = `${API_URL}/PostBoleta/?cod_buque=${codBuque}&id_puerto=${idPuerto}&id_funcionario=${idFuncionario}`;
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            const boleta = await response.json();
+            
+            // 4. Mostrar resultado del Backend en la UI original
+            setResultado({
+                mostrar: true,
+                total: boleta.monto,
+                idBoleta: boleta.idBoleta,
+                fecha: boleta.fechaEmision || new Date().toLocaleDateString()
+            });
+            setStatus({ loading: false, error: '' });
+        } else {
+            setStatus({ loading: false, error: 'Error: Verifica que los IDs existan en la base de datos.' });
+        }
+    } catch (error) {
+        console.error(error);
+        setStatus({ loading: false, error: 'No se pudo conectar con el servidor.' });
     }
-    
-    const impuestos = (tarifaBase + costoServicios) * 0.16;
-    const total = (tarifaBase + costoServicios + impuestos) * diasValidos;
-
-    setResultado({
-      mostrar: true,
-      total: total,
-      tarifaBase: tarifaBase * diasValidos,
-      costoServicios: costoServicios * diasValidos,
-      impuestos: impuestos * diasValidos
-    });
-
-    // Guardar cálculo
-    saveCalculation({
-      type: 'comercial',
-      total: total,
-      details: {
-        tonelaje: tonelajeValido,
-        dias: diasValidos,
-        tipo: tipoCarga,
-        servicios: servicios,
-        tarifaBase: tarifaBase * diasValidos,
-        costoServicios: costoServicios * diasValidos,
-        impuestos: impuestos * diasValidos
-      }
-    });
-  };
-
-  const saveCalculation = (data) => {
-    console.log('Guardando cálculo comercial:', data);
-    // Guardar en localStorage
-    const calculosPrevios = JSON.parse(localStorage.getItem('calculosComerciales') || '[]');
-    calculosPrevios.push({
-      ...data,
-      fecha: new Date().toISOString(),
-      id: Date.now()
-    });
-    localStorage.setItem('calculosComerciales', JSON.stringify(calculosPrevios));
   };
 
   const resetearFormulario = () => {
-    setTonelaje('');
-    setDias('1');
-    setTipoCarga('general');
-    setServicios('basico');
-    setErrors({ tonelaje: false, dias: false });
-    setResultado({
-      mostrar: false,
-      total: 0,
-      tarifaBase: 0,
-      costoServicios: 0,
-      impuestos: 0
-    });
+    setCodBuque('');
+    setIdPuerto('');
+    setIdFuncionario('');
+    setResultado({ mostrar: false, total: 0, idBoleta: '', fecha: '' });
+    setStatus({ loading: false, error: '' });
   };
 
   return (
@@ -138,84 +85,59 @@ const Comerciales = () => {
       <div className="calculator">
         <div className="calculator-header">
           <h2>Buques Comerciales</h2>
-          <p>Calcule el costo de estadía para buques de carga</p>
+          <p>Generar boleta y calcular estadía (Conectado a AWS)</p>
         </div>
         
         <div className="calculator-grid">
-          {/* Campo Tonelaje */}
+          {/* Campo: Código Buque */}
           <div className="form-group">
-            <label htmlFor="com-tonelaje">Tonelaje (TRB)</label>
+            <label htmlFor="cod-buque">Código del Buque</label>
+            <input 
+              type="text" 
+              id="cod-buque"
+              placeholder="Ej: BUQUE-001"
+              value={codBuque}
+              onChange={(e) => setCodBuque(e.target.value)}
+            />
+          </div>
+          
+          {/* Campo: ID Puerto */}
+          <div className="form-group">
+            <label htmlFor="id-puerto">ID Puerto</label>
             <input 
               type="number" 
-              id="com-tonelaje"
-              min="0" 
-              placeholder="Ingrese el tonelaje"
-              value={tonelaje}
-              onChange={(e) => setTonelaje(e.target.value)}
+              id="id-puerto"
+              placeholder="Ej: 1" 
+              value={idPuerto}
+              onChange={(e) => setIdPuerto(e.target.value)}
             />
-            {/* Mensaje de error condicional */}
-            {errors.tonelaje && (
-              <div className="error" style={{display: 'block'}}>
-                Por favor ingrese un valor válido
-              </div>
-            )}
           </div>
           
-          {/* Campo Días */}
+          {/* Campo: ID Funcionario */}
           <div className="form-group">
-            <label htmlFor="com-dias">Días de estadía</label>
+            <label htmlFor="id-funcionario">ID Funcionario</label>
             <input 
-              type="number" 
-              id="com-dias"
-              min="1" 
-              placeholder="Número de días" 
-              value={dias}
-              onChange={(e) => setDias(e.target.value)}
+              type="number"
+              id="id-funcionario"
+              placeholder="Ej: 1"
+              value={idFuncionario}
+              onChange={(e) => setIdFuncionario(e.target.value)}
             />
-            {errors.dias && (
-              <div className="error" style={{display: 'block'}}>
-                Por favor ingrese al menos 1 día
-              </div>
-            )}
-          </div>
-          
-          {/* Select Tipo de Carga */}
-          <div className="form-group">
-            <label htmlFor="com-tipo">Tipo de carga</label>
-            <select 
-              id="com-tipo"
-              value={tipoCarga}
-              onChange={(e) => setTipoCarga(e.target.value)}
-            >
-              <option value="general">Carga General</option>
-              <option value="contenedores">Contenedores</option>
-              <option value="granel">Granel Sólido</option>
-              <option value="liquido">Granel Líquido</option>
-            </select>
-          </div>
-          
-          {/* Select Servicios Adicionales */}
-          <div className="form-group">
-            <label htmlFor="com-servicios">Servicios adicionales</label>
-            <select 
-              id="com-servicios"
-              value={servicios}
-              onChange={(e) => setServicios(e.target.value)}
-            >
-              <option value="basico">Solo estadía</option>
-              <option value="medio">Estadía + Remolque</option>
-              <option value="completo">Estadía + Remolque + Suministros</option>
-            </select>
           </div>
         </div>
         
+        {/* Mensajes de Estado */}
+        {status.error && <div className="error" style={{display: 'block', marginBottom: '1rem'}}>{status.error}</div>}
+        {status.loading && <div className="info" style={{color: '#007bff', marginBottom: '1rem'}}>Calculando en el servidor...</div>}
+
         <div className="button-group">
           <button 
             id="calcular-comercial" 
             className="btn"
-            onClick={calcularCosto}
+            onClick={calcularEnBackend}
+            disabled={status.loading}
           >
-            Calcular Costo
+            {status.loading ? 'Procesando...' : 'Calcular Costo'}
           </button>
           
           <button 
@@ -223,21 +145,23 @@ const Comerciales = () => {
             onClick={resetearFormulario}
             style={{backgroundColor: '#6c757d', marginTop: '0.5rem'}}
           >
-            Resetear
+            Nueva Consulta
           </button>
         </div>
         
-        {/* Resultados - condicional */}
+        {/* Resultados con el estilo original */}
         {resultado.mostrar && (
           <div id="result-comercial" className="result" style={{display: 'block'}}>
-            <h3>Costo total de estadía</h3>
+            <h3>Boleta Generada</h3>
             <div className="cost">$ <span id="total-comercial">{resultado.total.toFixed(2)}</span></div>
+            
             <div className="details">
-              <p>Desglose de costos:</p>
+              <p>Detalles de la transacción:</p>
               <ul>
-                <li>Tarifa base: $<span id="base-comercial">{resultado.tarifaBase.toFixed(2)}</span></li>
-                <li>Servicios: $<span id="servicios-comercial">{resultado.costoServicios.toFixed(2)}</span></li>
-                <li>Impuestos: $<span id="impuestos-comercial">{resultado.impuestos.toFixed(2)}</span></li>
+                <li><strong>ID Boleta:</strong> <span>{resultado.idBoleta}</span></li>
+                <li><strong>Fecha:</strong> <span>{resultado.fecha}</span></li>
+                <li><strong>Buque:</strong> <span>{codBuque}</span></li>
+                <li><strong>Estado:</strong> <span style={{color: 'green'}}>Guardado en BD</span></li>
               </ul>
             </div>
           </div>

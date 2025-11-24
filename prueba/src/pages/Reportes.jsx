@@ -1,8 +1,10 @@
-// src/pages/Reportes.jsx
 import React, { useState, useEffect } from 'react';
 import ModalDetalles from '../components/ModalDetalles';
 import { exportToExcel, exportAllData } from '../utils/exportToExcel';
 import '../assets/css/styleReporte.css';
+
+// Endpoint de tu Backend en AWS
+const API_URL = 'http://54.88.10.118:8080/api/boletas';
 
 const Reportes = () => {
   const [calculos, setCalculos] = useState([]);
@@ -11,304 +13,261 @@ const Reportes = () => {
   const [calculoSeleccionado, setCalculoSeleccionado] = useState(null);
   const [mostrarModal, setMostrarModal] = useState(false);
   const [mostrarDropdown, setMostrarDropdown] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Cargar cálculos al montar el componente
+  // Cargar datos al montar
   useEffect(() => {
-    cargarCalculos();
+    cargarDatosCombinados();
   }, []);
 
-  const cargarCalculos = () => {
-    const comerciales = JSON.parse(localStorage.getItem('calculosComerciales') || '[]');
-    const especiales = JSON.parse(localStorage.getItem('calculosEspeciales') || '[]');
-    const pasajeros = JSON.parse(localStorage.getItem('calculosPasajeros') || '[]');
+  // --- LÓGICA DE CARGA HÍBRIDA (BD + LOCALSTORAGE) ---
+  const cargarDatosCombinados = async () => {
+    setLoading(true);
+    const token = localStorage.getItem('token');
+    
+    let datosReales = [];
+    let datosSimulados = [];
 
-    const todosCalculos = [
-      ...comerciales.map(c => ({ ...c, tipo: 'comercial', tipoDisplay: 'Comercial' })),
-      ...especiales.map(c => ({ ...c, tipo: 'especial', tipoDisplay: 'Especial' })),
-      ...pasajeros.map(c => ({ ...c, tipo: 'pasajero', tipoDisplay: 'Pasajero' }))
-    ];
+    // 1. Obtener Datos Reales de AWS (Si hay login)
+    if (token) {
+        try {
+            const response = await fetch(API_URL, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (response.ok) {
+                datosReales = await response.json();
+            }
+        } catch (error) {
+            console.error("Error conectando con BD:", error);
+        }
+    }
 
-    todosCalculos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-    setCalculos(todosCalculos);
-    calcularEstadisticas(todosCalculos);
+    // 2. Obtener Simulaciones del Navegador
+    try {
+        datosSimulados = JSON.parse(localStorage.getItem('simulaciones') || '[]');
+    } catch (e) {
+        console.error("Error leyendo simulaciones locales", e);
+    }
+
+    // 3. Unificar y Normalizar
+    // Combinamos ambos arrays
+    const todosLosDatos = [...datosReales, ...datosSimulados];
+    
+    // Convertimos todo al mismo formato para que la tabla no falle
+    const datosNormalizados = todosLosDatos.map(normalizarBoleta);
+
+    // 4. Ordenar por fecha (más reciente primero)
+    datosNormalizados.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+    setCalculos(datosNormalizados);
+    calcularEstadisticas(datosNormalizados);
+    setLoading(false);
   };
 
-  const calcularEstadisticas = (calculosArray) => {
-    if (calculosArray.length === 0) {
+  // Esta función es clave: Convierte el objeto Java o el objeto LocalStorage a un formato común
+  const normalizarBoleta = (item) => {
+    const esSimulacion = item.esSimulacion === true;
+    
+    // Determinar tipo visual
+    let tipo = 'comercial';
+    let tipoDisplay = 'Comercial';
+
+    if (esSimulacion) {
+        tipo = 'simulacion';
+        tipoDisplay = '⚠️ Simulación';
+    } else if (item.buque?.codBuque?.includes('PAS')) {
+        tipo = 'pasajero';
+        tipoDisplay = 'Pasajero';
+    } else if (item.buque?.codBuque?.includes('ESP')) {
+        tipo = 'especial';
+        tipoDisplay = 'Especial';
+    }
+
+    return {
+        id: item.idBoleta || item.id, // ID de BD o ID temporal
+        fecha: item.fechaEmision || new Date().toISOString(),
+        total: item.monto,
+        tipo: tipo,
+        tipoDisplay: tipoDisplay,
+        esSimulacion: esSimulacion,
+        // Detalles unificados para la tabla y el modal
+        details: {
+            buque: item.buque ? item.buque.nombre : 'Desconocido',
+            codigo: item.buque ? item.buque.codBuque : 'N/A',
+            puerto: item.puerto ? item.puerto.nombre : 'N/A',
+            funcionario: item.funcionario ? item.funcionario.nombre : 'N/A'
+        }
+    };
+  };
+
+  const calcularEstadisticas = (lista) => {
+    if (lista.length === 0) {
       setEstadisticas({});
       return;
     }
 
-    const totales = calculosArray.reduce((acc, calc) => acc + calc.total, 0);
-    const promedio = totales / calculosArray.length;
-    const porTipo = calculosArray.reduce((acc, calc) => {
-      acc[calc.tipo] = (acc[calc.tipo] || 0) + 1;
-      return acc;
-    }, {});
-
-    const ingresosPorTipo = calculosArray.reduce((acc, calc) => {
-      acc[calc.tipo] = (acc[calc.tipo] || 0) + calc.total;
-      return acc;
+    const totales = lista.reduce((acc, curr) => acc + curr.total, 0);
+    const promedio = totales / lista.length;
+    
+    // Contadores por tipo
+    const porTipo = lista.reduce((acc, curr) => {
+        const key = curr.esSimulacion ? 'simulacion' : 'real';
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
     }, {});
 
     setEstadisticas({
-      totalCalculos: calculosArray.length,
+      totalCalculos: lista.length,
       totalIngresos: totales,
       promedio: promedio,
-      porTipo: porTipo,
-      ingresosPorTipo: ingresosPorTipo
+      porTipo: porTipo // { real: 5, simulacion: 2 }
     });
   };
 
-  // Filtrar cálculos según el tipo seleccionado
+  // --- ACCIONES ---
+
+  const eliminarCalculo = async (id, esSimulacion) => {
+    if (!window.confirm('¿Estás seguro de eliminar este registro?')) return;
+
+    if (esSimulacion) {
+        // Eliminar de LocalStorage
+        const simulaciones = JSON.parse(localStorage.getItem('simulaciones') || '[]');
+        const nuevasSimulaciones = simulaciones.filter(s => s.id !== id);
+        localStorage.setItem('simulaciones', JSON.stringify(nuevasSimulaciones));
+        cargarDatosCombinados(); // Recargar
+    } else {
+        // Eliminar de Base de Datos (AWS)
+        const token = localStorage.getItem('token');
+        try {
+            const response = await fetch(`${API_URL}/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.ok) {
+                cargarDatosCombinados(); // Recargar
+            } else {
+                alert("No se pudo eliminar de la base de datos (Revisa permisos).");
+            }
+        } catch (error) {
+            alert("Error de conexión al intentar eliminar.");
+        }
+    }
+  };
+
+  const limpiarSimulaciones = () => {
+      if(window.confirm("¿Borrar solo las simulaciones locales?")) {
+          localStorage.removeItem('simulaciones');
+          cargarDatosCombinados();
+      }
+  };
+
+  // --- FILTROS Y EXPORTACIÓN ---
+
   const calculosFiltrados = filtroTipo === 'todos' 
     ? calculos 
-    : calculos.filter(calc => calc.tipo === filtroTipo);
-
-  const verDetalles = (calculo) => {
-    setCalculoSeleccionado(calculo);
-    setMostrarModal(true);
-  };
-
-  const cerrarModal = () => {
-    setMostrarModal(false);
-    setCalculoSeleccionado(null);
-  };
-
-  const eliminarCalculo = (id, tipo) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este cálculo?')) {
-      const key = `calculos${tipo.charAt(0).toUpperCase() + tipo.slice(1)}`;
-      const calculosActuales = JSON.parse(localStorage.getItem(key) || '[]');
-      const nuevosCalculos = calculosActuales.filter(calc => calc.id !== id);
-      localStorage.setItem(key, JSON.stringify(nuevosCalculos));
-      cargarCalculos();
-    }
-  };
-
-  const limpiarReportes = () => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar todos los reportes? Esta acción no se puede deshacer.')) {
-      localStorage.removeItem('calculosComerciales');
-      localStorage.removeItem('calculosEspeciales');
-      localStorage.removeItem('calculosPasajeros');
-      setCalculos([]);
-      setEstadisticas({});
-    }
-  };
-
-  const exportarCSV = () => {
-    if (calculosFiltrados.length === 0) {
-      alert('No hay datos para exportar');
-      return;
-    }
-
-    const headers = ['Fecha', 'Tipo', 'Total', 'Detalles'];
-    const csvData = calculosFiltrados.map(calculo => [
-      new Date(calculo.fecha).toLocaleDateString(),
-      calculo.tipoDisplay,
-      `$${calculo.total.toFixed(2)}`,
-      JSON.stringify(calculo.details)
-    ]);
-
-    const csvContent = [
-      headers.join(','),
-      ...csvData.map(row => row.join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `reportes-${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+    : calculos.filter(c => c.tipo === filtroTipo);
 
   const exportarExcel = async () => {
-    if (calculosFiltrados.length === 0) {
-      alert('No hay datos para exportar');
-      return;
-    }
+    if (calculosFiltrados.length === 0) return alert('Sin datos');
     try {
-      await exportToExcel(calculosFiltrados, 'reportes_filtrados');
+      await exportToExcel(calculosFiltrados, 'reporte_portuario');
     } catch (error) {
-      console.error('Error en exportación Excel:', error);
-      alert('Error al exportar a Excel');
+      console.error(error);
+      alert('Error al exportar');
     }
   };
 
-  const exportarTodoExcel = async () => {
-    try {
-      await exportAllData();
-    } catch (error) {
-      console.error('Error en exportación completa:', error);
-      alert('Error al exportar todos los datos');
-    }
-  };
+  const toggleDropdown = () => setMostrarDropdown(!mostrarDropdown);
+  const closeDropdown = () => setMostrarDropdown(false);
 
-  const toggleDropdown = () => {
-    setMostrarDropdown(!mostrarDropdown);
-  };
+  // --- RENDER ---
 
-  const closeDropdown = () => {
-    setMostrarDropdown(false);
-  };
+  if (loading) return <div className="container mt-4"><div className="alert alert-info">Cargando datos del sistema...</div></div>;
 
   return (
     <div className="container mt-4">
       <div className="reporte-header">
-        <h1>Reportes de Cálculos</h1>
-        <p>Visualiza y gestiona todos los cálculos realizados</p>
+        <h1>Reportes de Operaciones</h1>
+        <p>Vista unificada: Base de Datos (AWS) + Simulaciones</p>
       </div>
 
-      {/* Estadísticas */}
-      {calculos.length > 0 && (
-        <div className="estadisticas">
-          <h3>Estadísticas</h3>
-          <div className="stats-grid">
-            <div className="stat-card">
-              <h4>Total de Cálculos</h4>
-              <p className="stat-number">{estadisticas.totalCalculos}</p>
-            </div>
-            <div className="stat-card">
-              <h4>Ingresos Totales</h4>
-              <p className="stat-number">${estadisticas.totalIngresos?.toFixed(2)}</p>
-            </div>
-            <div className="stat-card">
-              <h4>Promedio por Cálculo</h4>
-              <p className="stat-number">${estadisticas.promedio?.toFixed(2)}</p>
-            </div>
-            {estadisticas.porTipo && (
-              <>
-                <div className="stat-card">
-                  <h4>Comerciales</h4>
-                  <p className="stat-number">{estadisticas.porTipo.comercial || 0}</p>
-                  <small>${estadisticas.ingresosPorTipo?.comercial?.toFixed(2) || '0.00'}</small>
-                </div>
-                <div className="stat-card">
-                  <h4>Especiales</h4>
-                  <p className="stat-number">{estadisticas.porTipo.especial || 0}</p>
-                  <small>${estadisticas.ingresosPorTipo?.especial?.toFixed(2) || '0.00'}</small>
-                </div>
-                <div className="stat-card">
-                  <h4>Pasajeros</h4>
-                  <p className="stat-number">{estadisticas.porTipo.pasajero || 0}</p>
-                  <small>${estadisticas.ingresosPorTipo?.pasajero?.toFixed(2) || '0.00'}</small>
-                </div>
-              </>
-            )}
+      {/* Tarjetas de Estadísticas */}
+      <div className="estadisticas">
+        <h3>Resumen Financiero</h3>
+        <div className="stats-grid">
+          <div className="stat-card">
+            <h4>Transacciones Totales</h4>
+            <p className="stat-number">{estadisticas.totalCalculos || 0}</p>
+          </div>
+          <div className="stat-card">
+            <h4>Recaudación Total</h4>
+            <p className="stat-number text-success">${(estadisticas.totalIngresos || 0).toLocaleString('es-CL')}</p>
+          </div>
+          <div className="stat-card">
+            <h4>Reales vs Simulados</h4>
+            <small>Reales: {estadisticas.porTipo?.real || 0} | Simulados: {estadisticas.porTipo?.simulacion || 0}</small>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Filtros y Controles */}
+      {/* Controles */}
       <div className="controles-reporte">
         <div className="filtros">
-          <label htmlFor="filtro-tipo">Filtrar por tipo:</label>
-          <select 
-            id="filtro-tipo"
-            value={filtroTipo}
-            onChange={(e) => setFiltroTipo(e.target.value)}
-          >
-            <option value="todos">Todos los tipos</option>
-            <option value="comercial">Comerciales</option>
-            <option value="especial">Especiales</option>
-            <option value="pasajero">Pasajeros</option>
+          <label>Filtrar:</label>
+          <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
+            <option value="todos">Ver Todo</option>
+            <option value="comercial">Comerciales (BD)</option>
+            <option value="pasajero">Pasajeros (BD)</option>
+            <option value="simulacion">Solo Simulaciones</option>
           </select>
         </div>
 
         <div className="acciones">
           <div className="dropdown">
-            <button 
-              className="btn btn-exportar dropdown-toggle" 
-              type="button" 
-              onClick={toggleDropdown}
-            >
-              Exportar
-            </button>
+            <button className="btn btn-exportar dropdown-toggle" onClick={toggleDropdown}>Exportar</button>
             {mostrarDropdown && (
               <ul className="dropdown-menu show">
-                <li>
-                  <button 
-                    className="dropdown-item" 
-                    onClick={() => {
-                      exportarExcel();
-                      closeDropdown();
-                    }}
-                  >
-                    📊 Excel (Filtrado)
-                  </button>
-                </li>
-                <li>
-                  <button 
-                    className="dropdown-item" 
-                    onClick={() => {
-                      exportarTodoExcel();
-                      closeDropdown();
-                    }}
-                  >
-                    📈 Excel (Todos los datos)
-                  </button>
-                </li>
-                <li>
-                  <button 
-                    className="dropdown-item" 
-                    onClick={() => {
-                      exportarCSV();
-                      closeDropdown();
-                    }}
-                  >
-                    📄 CSV
-                  </button>
-                </li>
+                <li><button className="dropdown-item" onClick={() => { exportarExcel(); closeDropdown(); }}>📊 Descargar Excel</button></li>
               </ul>
             )}
           </div>
-          <button className="btn btn-limpiar" onClick={limpiarReportes}>
-            🗑️ Limpiar Reportes
-          </button>
+          <button className="btn btn-limpiar" onClick={limpiarSimulaciones}>🧹 Limpiar Simulaciones</button>
         </div>
       </div>
 
-      {/* Tabla de Reportes */}
+      {/* Tabla de Datos */}
       <div className="tabla-reportes">
         {calculosFiltrados.length > 0 ? (
-          <table className="table">
+          <table className="table table-hover">
             <thead>
               <tr>
                 <th>Fecha</th>
                 <th>Tipo</th>
-                <th>Total</th>
-                <th>Detalles</th>
+                <th>Buque / ID</th>
+                <th>Monto</th>
+                <th>Origen</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {calculosFiltrados.map((calculo) => (
-                <tr key={calculo.id}>
-                  <td>{new Date(calculo.fecha).toLocaleDateString()}</td>
+              {calculosFiltrados.map((item) => (
+                <tr key={item.id} className={item.esSimulacion ? "table-warning" : ""}>
+                  <td>{new Date(item.fecha).toLocaleDateString()}</td>
+                  <td><span className={`badge ${item.esSimulacion ? 'bg-warning text-dark' : 'bg-primary'}`}>{item.tipoDisplay}</span></td>
                   <td>
-                    <span className={`badge badge-${calculo.tipo}`}>
-                      {calculo.tipoDisplay}
-                    </span>
+                    <strong>{item.details.buque}</strong><br/>
+                    <small className="text-muted">{item.details.codigo}</small>
                   </td>
+                  <td className="fw-bold">${item.total.toLocaleString('es-CL')}</td>
+                  <td>{item.esSimulacion ? "💻 Local" : "☁️ AWS BD"}</td>
                   <td>
-                    <strong>${calculo.total.toFixed(2)}</strong>
-                  </td>
-                  <td>
-                    <button 
-                      className="btn btn-sm btn-info"
-                      onClick={() => verDetalles(calculo)}
-                    >
-                      Ver Detalles
-                    </button>
-                  </td>
-                  <td>
-                    <button 
-                      className="btn btn-sm btn-danger"
-                      onClick={() => eliminarCalculo(calculo.id, calculo.tipo)}
-                    >
-                      Eliminar
-                    </button>
+                    <button className="btn btn-sm btn-info me-2" onClick={() => { setCalculoSeleccionado(item); setMostrarModal(true); }}>Ver</button>
+                    <button className="btn btn-sm btn-danger" onClick={() => eliminarCalculo(item.id, item.esSimulacion)}>Eliminar</button>
                   </td>
                 </tr>
               ))}
@@ -316,39 +275,15 @@ const Reportes = () => {
           </table>
         ) : (
           <div className="no-data">
-            <h3>📊 No hay cálculos para mostrar</h3>
-            <p>Realiza algunos cálculos en las calculadoras para ver los reportes aquí.</p>
-            <div style={{ marginTop: '20px' }}>
-              <a href="/calculadora" className="btn btn-exportar">
-                Ir a Calculadoras
-              </a>
-            </div>
+            <h3>Sin registros</h3>
+            <p>No hay datos que coincidan con el filtro.</p>
           </div>
         )}
       </div>
 
-      {/* Modal de Detalles */}
-      {mostrarModal && (
-        <ModalDetalles 
-          calculo={calculoSeleccionado}
-          onClose={cerrarModal}
-        />
-      )}
-
-      {/* Overlay para cerrar dropdown */}
-      {mostrarDropdown && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 999
-          }}
-          onClick={closeDropdown}
-        />
-      )}
+      {/* Modal y Overlay */}
+      {mostrarModal && <ModalDetalles calculo={calculoSeleccionado} onClose={() => setMostrarModal(false)} />}
+      {mostrarDropdown && <div className="dropdown-overlay" onClick={closeDropdown} />}
     </div>
   );
 };

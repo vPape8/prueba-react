@@ -89,12 +89,12 @@ const Header = () => {
             </Nav.Link>
           </Nav>
           
-          <Nav id="dynamic-nav-items" className="d-flex align-items-center">
+          <Nav id="dynamic-nav-items" className="d-flex align-items-center gap-3">
             {user ? (
-              <>
-                <span style={{ color: '#fff', marginRight: 12 }}>{user.name}</span>
-                <Button variant="outline-light" size="sm" onClick={handleLogout}>Cerrar sesión</Button>
-              </>
+              <div className="d-flex align-items-center">
+                <span className="text-light me-3 fw-bold">{user.name}</span>
+                <Button variant="outline-danger" size="sm" onClick={handleLogout}>Cerrar sesión</Button>
+              </div>
             ) : (
               <Nav.Link as={Link} to="/login">Iniciar sesión</Nav.Link>
             )}
