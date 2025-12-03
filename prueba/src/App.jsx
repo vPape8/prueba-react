@@ -12,7 +12,7 @@ import Reportes from './pages/Reportes';
 import Contacto from './pages/Contacto';
 import Panel from './pages/Panel';
 import PrivateRoute from './components/PrivateRoute';
-
+import { Navigate } from 'react-router-dom';
 function App() {
   return (
     <Router>
@@ -22,6 +22,7 @@ function App() {
                 <Route path="/login" element={<InicioSeccion />} />
                 <Route path="/" element={<PrivateRoute><Home/></PrivateRoute>} />
                 <Route path="/calculadora" element={<PrivateRoute><Calculadora/></PrivateRoute>} />
+                <Route path="/" element={<Navigate to="/login" replace />} />
                 <Route path="/comerciales" element={<PrivateRoute><Comerciales/></PrivateRoute>} /> 
                 <Route path="/reportes" element={<PrivateRoute><Reportes/></PrivateRoute>} />
                 <Route path="/contacto" element={<PrivateRoute><Contacto/></PrivateRoute>} />
