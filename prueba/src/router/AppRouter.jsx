@@ -12,7 +12,7 @@ const AppRouter = () => {
   return (
     <Routes>
       {/* Rutas Públicas */}
-      <Route path="/" element={<Home />} />
+      <Route path="/" element={<InicioSeccion/>} />
       <Route path="/login" element={<InicioSeccion />} /> 
       <Route path="/contacto" element={<Contacto />} />
 
@@ -20,6 +20,11 @@ const AppRouter = () => {
       <Route path="/calculadora" element={
         <PrivateRoute>
           <Calculadora />
+        </PrivateRoute>
+      } />
+      <Route path="/home" element={
+        <PrivateRoute>
+          <Home />
         </PrivateRoute>
       } />
       
